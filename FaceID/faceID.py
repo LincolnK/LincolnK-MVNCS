@@ -163,4 +163,4 @@ def main():
     primary_NCS.CloseDevice()
     
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
