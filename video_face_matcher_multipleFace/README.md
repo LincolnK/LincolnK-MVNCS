@@ -1,3 +1,8 @@
+I did not make the programs in this directory. I downloaded them from the NCappzoo which can be found here https://github.com/movidius/ncappzoo
+
+I did however make a few changes to the program, just becuase I wanted to get a better understanding of how it works.
+
+-------------------------------------------------------------------------------------------------------------------------
 # Introduction
 The video_face_matcher_multipleFace example app uses the TensorFlow [ncappzoo/tensorflow/facenet](../../tensorflow/facenet) neural network to find a face in a video camera stream that matches with a list of known face image.  
 
