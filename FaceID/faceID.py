@@ -112,7 +112,7 @@ def run_camera(output, valid_image_name, graph):
                     rechecks = 12
             else:
                 print("Checking... File " + frame_name + " matches " + validated_image_list[min_index])
-                found_match = True
+                found_match = False
             rechecks += 1
         else:
             found_match = False
