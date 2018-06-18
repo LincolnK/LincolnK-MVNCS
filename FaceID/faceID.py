@@ -16,9 +16,22 @@ RESOLUTION_HEIGHT = 640   # was 480, tested at 1280 turned blue, tested at 720 c
 NETWORK_WIDTH = 160       # was 160
 NETWORK_HEIGHT = 160      # was 160
 
-MATCH_THRESHOLD = 0.15
+MATCH_THRESHOLD = 0.3
 
 
+
+
+'''-----------------------------------------------------------------------------------------------------
+This function is where the neural network is actually put into play.
+Preproccess function sets up the image so that it can properly be read by the neural network.
+LoadTensor is the function that simulates the Neural Network
+
+Parameters
+    image (type mat)
+        This is the image that was taken by the camera, sent in whatever resolution the camera took the picture at
+    graph (type graph)
+        This is the .graph file that the Neural Network uses to find facial features       
+'''-----------------------------------------------------------------------------------------------------
 def infer(image, graph):
     resized_image = preprocess(image)
     graph.LoadTensor(resized_image.astype(numpy.float16), None)
@@ -26,17 +39,40 @@ def infer(image, graph):
     return output
     
     
+    
+    
+'''-----------------------------------------------------------------------------------------------------
+This funtion is used to put an overlay on the output window. This makes it extra clear if a face is detected
+The first part of the function puts text onto the screen
+The second part arranges a border around the window, either green or red. if matching is true, the border is green. Otherwise it is red
+
+
+image (type mat)
+    This is the image that was taken by the camera, sent in whatever resolution the camera took the picture at
+info (type string)
+    This is any info that should be listed in the upper right corner. I use it for a FPS counter, but the detected persons name could also be useful
+matching (type bool)
+    This is a bool statement used to determine if the face detected by the camera matches one in the verifed faces directory
+'''-----------------------------------------------------------------------------------------------------
 def frame_update(image, info, matching):
-    rect_width = 10
-    offset = int(rect_width/2)
     if(info != None):
         cv2.putText(image, info, (30,30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+    rect_width = 10
+    offset = int(rect_width/2)
     if(matching):
         cv2.rectangle(image, (offset, offset), (image.shape[1]-offset-1, image.shape[0]-offset-1), (0, 255, 0), 10)
     else:
         cv2.rectangle(image, (offset, offset), (image.shape[1]-offset-1, image.shape[0]-offset-1), (0, 0, 255), 10)
 
 
+
+
+'''-----------------------------------------------------------------------------------------------------
+This function whitens the image to make it easier for the neural network to detect features of the face.
+
+image (type mat)
+        This is the image that was taken by the camera, sent in whatever resolution the camera took the picture at
+'''-----------------------------------------------------------------------------------------------------
 def whiten_image(image):
     mean = numpy.mean(image)
     std = numpy.std(image)
@@ -45,6 +81,17 @@ def whiten_image(image):
     return whitened_image
 
 
+
+
+'''-----------------------------------------------------------------------------------------------------
+This function does all of the editing to make the image suitable to be interpreted by the neural network
+First, resize is imprortant because most neural networks can only accept a specific size image. This resize makes the image that size
+Next, the format of the image is changed from BRG to RGB. This neural network wants RGB arrays, but the camera takes RGB arrays, meaning the format must be changed.
+Last, whiten image whitens the image
+
+image (type mat)
+        This is the image that was taken by the camera, sent in whatever resolution the camera took the picture at
+'''-----------------------------------------------------------------------------------------------------
 def preprocess(image):
     preprocessed_image = cv2.resize(image, (NETWORK_WIDTH, NETWORK_HEIGHT))
     preprocessed_image = cv2.cvtColor(preprocessed_image, cv2.COLOR_BGR2RGB)
@@ -52,6 +99,17 @@ def preprocess(image):
     return preprocessed_image
 
 
+
+
+'''-----------------------------------------------------------------------------------------------------
+This function compares two outputs of the neural network
+The total difference is between 0 and 2.15 with 0 being an exact copy
+
+face1 (type float[])
+    this is the output of the neural network after it processes a face.
+face2 (type float[])
+    same as face1
+'''-----------------------------------------------------------------------------------------------------
 def face_match(face1, face2):
     if(len(face1) != len(face2)):
         print("Length Misatch")
@@ -64,14 +122,24 @@ def face_match(face1, face2):
     return total_difference
 
 
-def handle_keys(raw_key):
-    ascii_code = raw_key & 0xFF
-    if ((ascii_code == ord('q')) or (ascii_code == ord('Q'))):
-        return False
-
-    return True
 
 
+'''-----------------------------------------------------------------------------------------------------
+This function makes up the bulk of the program
+It begins by opening the camera and a window which will show the output of the camera, the it goes into the main loop
+the main loop reads the camera. If the camera gets disconected the program terminates
+test_output is the output of the neural network after it tests the image taken by the camera
+next the program finds the face that is most similar to the on analyzed by the neural network
+The program looks for a valid face for 5 cycles. This is to filer out any noise that the neural network might have
+This also helps the program if one of the images is bad, for example if one of the images comes out too blurry, the program will recognize the person after two bad framesany more bad frames and it will reset.
+
+output (type string[])
+    This is the list of all the verified faces
+valid_image_name (type string)
+    This is the listed directory of the verified faces
+graph (type graph)
+    This is the .graph that the neural network will use
+'''-----------------------------------------------------------------------------------------------------
 def run_camera(output, valid_image_name, graph):
     camera = cv2.VideoCapture(0)
     camera.set(cv2.CAP_PROP_FRAME_WIDTH, RESOLUTION_WIDTH)
@@ -92,8 +160,6 @@ def run_camera(output, valid_image_name, graph):
         if (not return_val):
             print("No Image from camera")
             break
-        frame_count += 1
-        frame_name = "Camera Frame " + str(frame_count)
         test_output = infer(video_image, graph)
             
         min_distance = 100
@@ -105,39 +171,43 @@ def run_camera(output, valid_image_name, graph):
                 min_distance = distance
                 min_index = i
         if(min_distance<=MATCH_THRESHOLD):
-            if(rechecks > 10):
-                print("Found! File " + frame_name + " matches " + validated_image_list[min_index])
+            frame_name = validated_image_list[min_index]
+            if(rechecks > 5):
+                print("Found! " + validated_image_list[min_index])
                 found_match = True
-                if(rechecks > 12):
-                    rechecks = 12
+                if(rechecks > 7):
+                    rechecks = 7
             else:
-                print("Checking... File " + frame_name + " matches " + validated_image_list[min_index])
+                print("Checking... " + validated_image_list[min_index])
                 found_match = False
             rechecks += 1
         else:
+            frame_name = "No Verified Face"
             found_match = False
-            print("Fail! File " + frame_name + " does not match any image.")
-            if(rechecks <= 10):
+            print("Fail!")
+            if(rechecks <= 5):
                 rechecks = 0
             else:
-                rechecks = rechecks - 1
-        frame_update(video_image, frame_name, found_match)
+                rechecks -= 1
+        frame_update(video_image, frame_name[0:-4], found_match)
 
         prop_val = cv2.getWindowProperty(CV_WINDOW_NAME, cv2.WND_PROP_ASPECT_RATIO)
         if(prop_val < 0.0):
             print("Closed")
             break
         cv2.imshow(CV_WINDOW_NAME, video_image)
-        raw_key = cv2.waitKey(1)
-        if (raw_key != -1):
-            if (handle_keys(raw_key) == False):
-                print('user pressed Q')
-                break
+        cv2.waitKey(1)
+
+
+
         
-    if (found_match):
-        cv2.imshow(CV_WINDOW_NAME, video_image)
-        cv2.waitKey(0)
-            
+'''-----------------------------------------------------------------------------------------------------
+This is the main function.
+First, it sets up the NCS
+Next, it runs the neural netowrk on all of the files stored in valid images directory
+After that, it calls the looping function.
+when the looping function is closed, the main function closes the NCS
+'''-----------------------------------------------------------------------------------------------------
 def main():
     connected_devices = mvnc.EnumerateDevices()
     if len(connected_devices) == 0:
@@ -161,6 +231,9 @@ def main():
     
     graph.DeallocateGraph()
     primary_NCS.CloseDevice()
+    
+    
+    
     
 if __name__ == "__main__":
     main()
