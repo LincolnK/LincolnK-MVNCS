@@ -143,8 +143,8 @@ valid_image_name (type string)
 graph (type graph)
     This is the .graph that the neural network will use
 '''
-def run_camera(output, valid_image_name, graph, csvw, width, height):
-    video_filename = "outpy.mp4"
+def run_camera(output, valid_image_name, graph, csvw, width, height, filename):
+    video_filename = filename
     video = cv2.VideoCapture(video_filename)
     
     face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
@@ -154,6 +154,10 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
         return
     
     cv2.namedWindow(CV_WINDOW_NAME)
+    
+    detection_frames = 0
+    total_frames = 0
+    assurance = 0
     
     timerClist = []
     timerDlist = []
@@ -195,8 +199,12 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
         faces = face_cascade.detectMultiScale(gray, 1.3, 5)
         
         timerH = time.time()
+        set = True
         for(x,y,w,h) in faces:
             facesDetected = len(faces)
+            if(set):
+                set = False
+                detection_frames += 1
             # Test each face in the nerual network
             timerC= time.time()
             cropped_face = video_image[y:y+h, x:x+w]
@@ -222,6 +230,8 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
                 cv2.rectangle(video_image,(x,y),(x+w,y+h),(0,0,255),2)
                 cv2.putText(video_image, "Unknown", (x,y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
                 print("Fail!")
+            if(min_distance < 1.4):
+                assurance = assurance + min_distance
             timerE = time.time()
             neuralTime.append(timerD - timerC)
             matchTime.append(timerE - timerD)
@@ -232,6 +242,7 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
             print("Closed")
             break
         # Show the Image
+        total_frames += 1
         cv2.imshow(CV_WINDOW_NAME, video_image)
         cv2.waitKey(1)
         timerG = time.time()
@@ -247,11 +258,31 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
         cascadeTime.append(timerH - timerB)
         showTime.append(timerG - timerF)
         
-    avg_readTime = str(sum(readTime)/float(len(readTime)))
-    avg_cascadeTime = str(sum(cascadeTime)/float(len(cascadeTime)))
-    avg_neuralTime = str(sum(neuralTime)/float(len(neuralTime)))
-    avg_matchTime = str(sum(matchTime)/float(len(matchTime)))
-    avg_showTime = str(sum(showTime)/float(len(showTime)))
+    try:
+        avg_readTime = str(sum(readTime)/float(len(readTime)))
+    except:
+        avg_readTime = "NA"
+        
+    try:
+        avg_cascadeTime = str(sum(cascadeTime)/float(len(cascadeTime)))
+    except:
+        avg_cascadeTime = "NA"
+        
+    try:
+        avg_neuralTime = str(sum(neuralTime)/float(len(neuralTime)))
+    except:
+        avg_neuralTime = "NA"
+        
+    try:
+        avg_matchTime = str(sum(matchTime)/float(len(matchTime)))
+    except:
+        avg_matchTime = "NA"
+        
+    try:
+        avg_showTime = str(sum(showTime)/float(len(showTime)))
+    except:
+        avg_showTime = "NA"
+        
     avg_cycleTimeNoFace = 'NA'
     avg_cycleTimeOneFace = 'NA'
     avg_cycleTimeTwoFace = 'NA'
@@ -265,7 +296,11 @@ def run_camera(output, valid_image_name, graph, csvw, width, height):
     if(len(cycleTimeThreeFace) != 0):
         avg_cycleTimeThreeFace = str(sum(cycleTimeThreeFace)/float(len(cycleTimeThreeFace)))
     
-    csvw.writerow([str(width) + "x" + str(height) + ";" + avg_readTime + ";" + avg_cascadeTime + ";" + avg_neuralTime + ";" + avg_matchTime + ";" + avg_showTime + ';' + avg_cycleTimeNoFace + ';' + avg_cycleTimeOneFace + ';' + avg_cycleTimeTwoFace + ';' + avg_cycleTimeThreeFace])
+    average_assurance = "NA"
+    if(detection_frames != 0):
+        average_assurance = str(assurance/detection_frames)
+    
+    csvw.writerow([str(width) + "x" + str(height) + ";" + filename + ";" + str(total_frames) + ";" + str(detection_frames) + ";" + str(assurance) + ";" + average_assurance + ";" + avg_readTime + ";" + avg_cascadeTime + ";" + avg_neuralTime + ";" + avg_matchTime + ";" + avg_showTime + ';' + avg_cycleTimeNoFace + ';' + avg_cycleTimeOneFace + ';' + avg_cycleTimeTwoFace + ';' + avg_cycleTimeThreeFace])
     video.release()
 
 
@@ -297,12 +332,28 @@ def main():
         valid_image = cv2.imread("./validated_images/"+i)
         valid_output.append(infer(valid_image, graph))
     
-    with open('testa.csv', 'w', newline='') as csvfile:
+    with open('timing_and_accuracy_analysis.csv', 'w', newline='') as csvfile:
         csvw = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        csvw.writerow(["Resolution;Average Read Time;Average Cascade Time;Average Neural Time;Average Match Time;Average Show Time;Average Cycle Time No Face;Average Cycle Time One Face;Average Cycle Time Two Face;Average Cycle Time Three Face"])
-        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480)
-        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720)
-        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080)
+        csvw.writerow(["Resolution;Test;Total Frames;Detected Frames;Assurance;Average Assurance;Average Read Time;Average Cascade Time;Average Neural Time;Average Match Time;Average Show Time;Average Cycle Time No Face;Average Cycle Time One Face;Average Cycle Time Two Face;Average Cycle Time Three Face"])
+        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480, "3ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720, "3ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080, "3ft_test.mp4")
+        
+        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480, "5ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720, "5ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080, "5ft_test.mp4")
+        
+        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480, "10ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720, "10ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080, "10ft_test.mp4")
+        
+        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480, "15ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720, "15ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080, "15ft_test.mp4")
+        
+        run_camera(valid_output, validated_image_list, graph, csvw, 640, 480, "20ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1280, 720, "20ft_test.mp4")
+        run_camera(valid_output, validated_image_list, graph, csvw, 1920, 1080, "20ft_test.mp4")
 
     
     cv2.destroyAllWindows()
